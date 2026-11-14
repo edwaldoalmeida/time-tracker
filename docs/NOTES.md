@@ -1,5 +1,7 @@
 # time-tracker
 
+- (N)YATTA - (Not) Yet Another Time Tracking Application
+
 ## goals
   - exercise software engineering practices/learning
   - use the tool as a lab for my experimentation, AI stuff, A/B testing etc.
@@ -66,8 +68,10 @@
   - predictions (__AI__)
   - MCP
 
-
-
+## Out of Scope (for V1)
+* smart auto-complete
+* AI insights
+* MCP / agent integration
 
 
 ## possible names:
