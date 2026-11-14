@@ -60,7 +60,7 @@ a join table for entry–tag associations. Other persistence adapters may use
 different storage layouts while preserving the same behavior.
 
 - **Entry:** UUID, required local work date and category, optional local start
-  and end times, title, description, and feeling, creation and last-updated
+  and end times at minute precision, title, description, and feeling, creation and last-updated
   timestamps, and soft-deletion information.
 - **Highlight:** UUID, nonblank text, parent entry, and creation timestamp. An
   entry has zero or more highlights. Editing a highlight preserves its creation
@@ -75,8 +75,9 @@ different storage layouts while preserving the same behavior.
 
 Work dates and times preserve the entered local calendar and clock values;
 access from another timezone does not shift them. Creation and update
-timestamps are separate from these work values. Entries without a start time
-are ordered by creation timestamp, with UUID as a stable tie-breaker.
+timestamps are separate from these work values. Entries with the same start
+time, and entries without a start time, are ordered by creation timestamp,
+with UUID as a stable tie-breaker.
 
 Surrounding whitespace is trimmed from text. Blank optional text is treated
 as absent; a blank highlight input creates no highlight record and does not
@@ -112,8 +113,6 @@ The API provides operations to:
 - Get an entry, create one, replace its complete editable state with `PUT`,
   and soft-delete it.
 - List fixed V1 categories and list or search reusable tags.
-- Calculate entry suggestions using the device's supplied local date and
-  time and saved entries.
 - Generate a report for a period type and selection, returning the resolved
   inclusive date range, all matching entries, totals, breakdowns, highlights,
   and an indication of entries without calculated duration.
@@ -143,6 +142,75 @@ human-readable message, and field-specific details where applicable. HTTP
 status codes distinguish invalid requests, missing entries, and concurrency
 conflicts. Contract tests cover endpoints, payloads, errors, and representative
 business behavior; replacement backends should pass the same tests.
+
+## TIME AND REPORTING RULES
+
+The composer defaults the date to the device's current local date and leaves
+the start time blank. Work times use minute precision. Durations are whole
+minutes calculated from entered clock times, ignoring daylight-saving changes.
+Entries cannot span midnight; when both times are present, the end must be
+later than the start.
+
+Overlap checks compare entries on the same work date only. Complete blocks
+overlap when they intersect, not when they merely meet at a boundary. Against
+a complete block, a start-only time is flagged at the block's start or inside
+it, but not at its end; an end-only time is flagged inside it or at its end,
+but not at its start. Two incomplete entries of the same type with the same
+single time are flagged. Opposite types at the same time and incomplete
+entries with different single times are not flagged against one another.
+
+Reports include incomplete entries without adding them to duration totals,
+and count entries without a calculated duration. Overlapping entries each
+contribute their full duration. Each entry contributes once to the overall
+total and its full duration to each applicable tag row. With selected tags,
+only those tags appear in the breakdown; without a tag filter, the breakdown
+includes all tags on matching entries and an Untagged group for matching
+untagged entries. Groups without matching entries are omitted. A report with
+no matches has zero overall duration, no groups or highlights, and a
+no-matching-entries indication.
+
+Custom report ranges are inclusive; reversed start and end dates are swapped.
+Report highlights follow timeline entry order and then highlight creation
+order, including the specified UUID tie-breakers. Other filtering and calendar
+period rules follow the PRD.
+
+## REMAINING DESIGN DECISIONS
+
+The following are placeholders for future discussion; they are not yet V1
+design decisions.
+
+### Security and operating context
+
+- Define the hosting environment, private access method, and network exposure.
+- Decide authentication and authorization, TLS, secrets management, and data
+  protection appropriate for access from multiple devices.
+- Define configuration, persistent storage, backup schedule, and a tested
+  restore procedure, including recovery of soft-deleted entries.
+
+### Testing strategy
+
+- Map requirements and failure cases to unit, persistence integration, API
+  contract, system, and end-to-end tests.
+- Decide the roles and tools for frontend, backend, system, end-to-end, and
+  any performance testing; determine whether Python system tests are needed.
+- Define how tests run locally and in continuous integration, including test
+  data and database setup.
+
+### Detailed API contract
+
+- Write the contract-first OpenAPI specification: exact paths, schemas,
+  status codes, error responses, pagination, concurrency, and examples.
+- Specify compatibility and contract-test expectations for replacement
+  backends.
+
+### Technology and deployment choices
+
+- Select frontend testing tools (Jest or Vitest) and end-to-end tools
+  (Playwright, Cucumber, or both).
+- Choose the ORM and schema migration tool; assess whether Redux is needed.
+- Decide the initial container deployment approach and whether Kubernetes or
+  K3s is a V1 requirement or a later experiment.
+- Specify runtime and tool versions, configuration, and deployment workflow.
 
 ## TECH STACK
 

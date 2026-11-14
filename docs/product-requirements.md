@@ -55,16 +55,15 @@ V1 delivers a reliable log-entry and report workflow.
 - Saved entries persist across app restarts.
 - Entries cannot span midnight. When both times are provided, `endTime` must be later than `startTime`.
 - Overlapping time entries are visibly flagged as an inconsistency, but the user can still save them. Entries that meet at a time boundary do not overlap.
-- An entry with only a start or end time is flagged when that time falls within another entry's time block.
+- Overlaps are checked only between entries on the same date. Against a complete block, a start-only time is flagged at its start or inside it, but not at its end; an end-only time is flagged inside it or at its end, but not at its start.
+- Two start-only entries or two end-only entries with the same time are flagged. A start-only and end-only entry with the same time, or incomplete entries with different times, are not flagged against one another.
 
 ### Main screen and suggestions
 
 - Opening the app shows the log timeline.
 - All entries appear on the timeline, with older dates above newer dates; the entry composer is at the bottom.
 - Within a date, entries with a start time are ordered by start time. Entries without a start time follow them in creation order.
-- For each new entry, the app suggests:
-  - the current date for each new entry,
-  - a start time based on the previous entry's end time, rounded down to a 15-minute increment. If there is no entry for the current day, or the previous entry has no end time, use the current time rounded down instead.
+- Each new entry defaults to the device's current local date. The start time is left blank for the user to enter.
 
 ### Reports
 
@@ -73,6 +72,8 @@ V1 delivers a reliable log-entry and report workflow.
 - Entries without both a start and end time remain in the results but do not contribute to duration totals; the report indicates that some entries lack a calculated duration.
 - Overlapping entries each contribute their full duration, even when this counts overlapping time more than once.
 - An entry can have multiple tags. Its full duration counts under each of its tags in a tag breakdown, but only once in the overall total. The report explains that tag totals may exceed the overall total.
+- When tags are selected, the tag breakdown shows only selected tags. Without a tag filter, it shows all tags on matching entries and an Untagged group for untagged entries. Groups without matching entries are omitted.
+- The report counts matching entries without a calculated duration. When no entries match, it shows an empty report with a zero overall duration and a no-matching-entries indication.
 - Entries without highlights remain in the results and contribute to time totals when their duration can be calculated.
 - Reporting periods include:
   - A selected calendar day
@@ -80,6 +81,7 @@ V1 delivers a reliable log-entry and report workflow.
   - A calendar month
   - A calendar year
   - A custom start and end date, both inclusive
+- If a custom period's start date is later than its end date, swap the dates.
 - Use the device's local timezone for the current date and report boundaries.
 - The report includes a chronological bullet list of highlights from matching log entries. Each highlight includes the entry's date, category, and title when present.
 - The report can be copied to the clipboard or saved as a Markdown (`.md`) file, including the time distribution and highlights.
