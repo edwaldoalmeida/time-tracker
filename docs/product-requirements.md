@@ -32,11 +32,12 @@ V1 delivers a reliable log-entry and report workflow.
   - `startTime` (optional)
   - `endTime` (optional)
   - `title` (optional)
-  - `description + highlights` (optional)
+  - `description` (optional)
+  - `highlights` (optional)
   - `category` (mandatory)
   - `tags` (optional)
-  - `feeling` (optional, not currently implemented but desired, to store how I felt during that activity)
-- Examples of categories:
+  - `feeling` (optional, to store how I felt during that activity)
+- The fixed V1 categories are:
   - `QA`
   - `Dev`
   - `Misc`
@@ -51,29 +52,37 @@ V1 delivers a reliable log-entry and report workflow.
   - `local-llms`
   - `ASTRA`
 - Users can add, edit or delete saved log entries and their highlights.
-- Overlapping time entries are visibly flagged as an inconsistency, but the user can still save them.
+- Saved entries persist across app restarts.
+- Entries cannot span midnight. When both times are provided, `endTime` must be later than `startTime`.
+- Overlapping time entries are visibly flagged as an inconsistency, but the user can still save them. Entries that meet at a time boundary do not overlap.
+- An entry with only a start or end time is flagged when that time falls within another entry's time block.
 
 ### Main screen and suggestions
 
 - Opening the app shows the log timeline.
-- Older entries appear above newer entries; the entry composer is at the bottom.
+- All entries appear on the timeline, with older dates above newer dates; the entry composer is at the bottom.
+- Within a date, entries with a start time are ordered by start time. Entries without a start time follow them in creation order.
 - For each new entry, the app suggests:
   - the current date for each new entry,
-  - a start time rounded to 15-minute increments (eg: 9:00, 9:15, 9:30, 9:45, 10:00, 10:15, etc) according to the previous entry
+  - a start time based on the previous entry's end time, rounded down to a 15-minute increment. If there is no entry for the current day, or the previous entry has no end time, use the current time rounded down instead.
 
 ### Reports
 
-- Time distribution reports by `category` and/or `tag` for a selected period
-- Filtering log entries by `category` and/or `tag`
+- One time-distribution report shows results by `category` and/or `tag` for a selected period, along with highlights from matching entries.
+- Filter log entries by `category` and/or `tag`. Multiple selected tags match any selected tag. When both a category and tags are selected, entries must match the category and at least one selected tag.
+- Entries without both a start and end time remain in the results but do not contribute to duration totals; the report indicates that some entries lack a calculated duration.
+- Overlapping entries each contribute their full duration, even when this counts overlapping time more than once.
+- An entry can have multiple tags. Its full duration counts under each of its tags in a tag breakdown, but only once in the overall total. The report explains that tag totals may exceed the overall total.
+- Entries without highlights remain in the results and contribute to time totals when their duration can be calculated.
 - Reporting periods include:
   - A selected calendar day
   - A calendar week (Monday through Sunday)
   - A calendar month
   - A calendar year
-  - A custom start and end date
-  - Since the last one-to-one
-- The report is a chronological bullet list of highlights from log entries in the selected period.
-- The report can be copied to the clipboard or saved as a Markdown (`.md`) file.
+  - A custom start and end date, both inclusive
+- Use the device's local timezone for the current date and report boundaries.
+- The report includes a chronological bullet list of highlights from matching log entries. Each highlight includes the entry's date, category, and title when present.
+- The report can be copied to the clipboard or saved as a Markdown (`.md`) file, including the time distribution and highlights.
 
 ## Later capabilities
 
