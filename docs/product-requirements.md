@@ -23,7 +23,7 @@ daily work activities and understand how time has been spent.
 
 ## V1 scope
 
-V1 delivers a reliable log-entry and report workflow. The report is the primary outcome; logging provides the data it needs.
+V1 delivers a reliable log-entry and report workflow.
 
 ### Log entries
 
@@ -57,8 +57,9 @@ V1 delivers a reliable log-entry and report workflow. The report is the primary 
 
 - Opening the app shows the log timeline.
 - Older entries appear above newer entries; the entry composer is at the bottom.
-- V1 suggests the current date and a start time rounded to 15-minute increments.
-- V1 suggestions are limited to date and time defaults.
+- For each new entry, the app suggests:
+  - the current date for each new entry,
+  - a start time rounded to 15-minute increments (eg: 9:00, 9:15, 9:30, 9:45, 10:00, 10:15, etc) according to the previous entry
 
 ### Reports
 
