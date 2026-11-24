@@ -25,6 +25,15 @@ daily work activities and understand how time has been spent.
 
 V1 delivers a reliable log-entry and report workflow.
 
+### Accounts
+
+- The app requires a login.
+- The first account created during setup is the admin.
+- Admins create accounts and can disable them. Accounts are never deleted.
+- Admins manage accounts only and cannot view or edit other users' entries.
+- Entries, tags, and categories belong to one account and are never visible to another.
+- A new account starts with its own copy of the fixed categories.
+
 ### Log entries
 
 - Each entry represents a time block and includes:

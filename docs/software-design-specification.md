@@ -59,19 +59,29 @@ separate relational records for entries, highlights, categories, and tags, and
 a join table for entry–tag associations. Other persistence adapters may use
 different storage layouts while preserving the same behavior.
 
-- **Entry:** UUID, required local work date and category, optional local start
-  and end times at minute precision, title, description, and feeling, creation and last-updated
-  timestamps, and soft-deletion information.
+- **Account:** UUID, login identifier, password hash, role (admin or user),
+  enabled flag, and creation timestamp. The first account created at setup is
+  the admin. Accounts are never deleted, only disabled.
+- **Entry:** UUID, owning account, required local work date and category,
+  optional local start and end times at minute precision, title, description,
+  and feeling, creation and last-updated timestamps, and soft-deletion
+  information.
 - **Highlight:** UUID, nonblank text, parent entry, and creation timestamp. An
   entry has zero or more highlights. Editing a highlight preserves its creation
   order; UUID breaks ties between identical creation timestamps.
-- **Category:** UUID and name. Each entry references exactly one category.
-  The seven categories in the PRD are fixed for V1.
-- **Tag:** UUID and display name. Names match case-insensitively. Tags are
-  reusable and remain available even when no entries use them.
+- **Category:** UUID, owning account, and name. Each entry references exactly
+  one category belonging to the same account. Every account is seeded with its
+  own copy of the seven PRD categories, which are fixed for V1.
+- **Tag:** UUID, owning account, and display name. Names match case-insensitively
+  within an account. Tags are reusable and remain available even when no
+  entries use them.
 - **Entry–tag association:** Entries may have multiple tags, and tags may be
-  used by multiple entries. Tags on an entry are unordered and cannot be
-  duplicated.
+  used by multiple entries of the same account. Tags on an entry are unordered
+  and cannot be duplicated.
+
+All entries, categories, and tags belong to exactly one account, and every
+read and write is scoped to the authenticated account. No account can read or
+modify another account's data, including the admin.
 
 Work dates and times preserve the entered local calendar and clock values;
 access from another timezone does not shift them. Creation and update
@@ -90,14 +100,14 @@ V1 has no restore interface. Deleting an entry does not delete reusable tags.
 
 The backend enforces the PRD's required fields and time rules as well as the
 rules above. PostgreSQL constraints also protect relationships and
-uniqueness, including entry–tag associations. Schema migrations manage the
-initial tables and future changes; the migration tool remains to be chosen.
-Database backups must include soft-deleted entries and retained tags. The
-backup schedule and restore procedure will be decided with deployment.
+uniqueness, including entry–tag associations and case-insensitive tag names
+within an account. Schema migrations manage the initial tables and future
+changes; the migration tool remains to be chosen. Database backups must
+include soft-deleted entries and retained tags.
 
 Tests should cover persistence and retrieval of relationships, case-insensitive
-tag matching, blank highlights, soft deletion, ordering ties, and preservation
-of local work dates and times.
+tag matching, blank highlights, soft deletion, ordering ties, preservation of
+local work dates and times, and rejection of access to another account's data.
 
 ## API CONTRACT
 
@@ -105,6 +115,11 @@ The REST-style JSON API uses the `/api/v1` prefix. Its OpenAPI specification
 is written contract-first and defines the shared compatibility target for
 frontends and replacement backends. Exact paths, schemas, status codes,
 pagination mechanics, and examples will be specified in that contract.
+
+All API operations except login and the first-account setup require an
+authenticated session. Results are scoped to the authenticated account, and
+an operation on another account's resource behaves as if it does not exist.
+Account management operations are restricted to admins.
 
 The API provides operations to:
 
@@ -174,18 +189,35 @@ Report highlights follow timeline entry order and then highlight creation
 order, including the specified UUID tie-breakers. Other filtering and calendar
 period rules follow the PRD.
 
+## SECURITY AND OPERATING CONTEXT
+
+The app runs on a machine on the owner's home network, reachable over the LAN
+or a VPN. It is not exposed to the public internet.
+
+HTTPS uses a self-signed or internal certificate. Each device that uses the
+app trusts the certificate once. The hostname can be a subdomain of
+`edwaldoalmeida.ca` resolved by local DNS.
+
+Accounts are real user accounts with login. The first account created at
+setup becomes the admin. There is no public registration; admins create
+accounts. Admins can disable accounts but cannot delete them, so account data
+is never orphaned. Admins manage accounts only and cannot read or edit other
+users' entries.
+
+Login sets an HTTP-only session cookie marked `Secure` and `SameSite`, so the
+frontend never stores credentials or tokens. Passwords are stored using a
+modern password hash such as Argon2id or bcrypt. Secrets and configuration are
+supplied through environment variables and are not committed to the
+repository.
+
+A nightly `pg_dump` backs up the database to a separate disk or network
+location. The restore procedure is documented and tested occasionally, and
+includes soft-deleted entries and retained tags.
+
 ## REMAINING DESIGN DECISIONS
 
 The following are placeholders for future discussion; they are not yet V1
 design decisions.
-
-### Security and operating context
-
-- Define the hosting environment, private access method, and network exposure.
-- Decide authentication and authorization, TLS, secrets management, and data
-  protection appropriate for access from multiple devices.
-- Define configuration, persistent storage, backup schedule, and a tested
-  restore procedure, including recovery of soft-deleted entries.
 
 ### Testing strategy
 
