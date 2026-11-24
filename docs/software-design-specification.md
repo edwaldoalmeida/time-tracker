@@ -214,19 +214,34 @@ A nightly `pg_dump` backs up the database to a separate disk or network
 location. The restore procedure is documented and tested occasionally, and
 includes soft-deleted entries and retained tags.
 
+## TESTING STRATEGY
+
+- **Backend unit tests (JUnit):** Domain rules with no Spring, HTTP, or
+  database—overlaps, ordering, durations, report calculations, and validation.
+- **Backend integration tests (JUnit + Testcontainers):** The persistence
+  adapter against real PostgreSQL, including relationships, soft-deletion
+  filtering, case-insensitive tag matching, per-account isolation, and schema
+  constraints.
+- **API contract tests:** Conformance to the OpenAPI document plus
+  representative behavior, written so a replacement backend can run the same
+  suite.
+- **Frontend unit tests:** Components and state logic. The tool choice is still
+  open.
+- **System tests (Python/Pytest):** Multi-step workflows through the public API
+  against a running stack—for example, entries across several days followed by
+  a report whose totals are verified end to end.
+- **End-to-end tests (Cucumber-Gherkin + Playwright):** Core workflows plus
+  edge cases—login, entry create/edit/delete with tags and highlights, reports,
+  overlap warnings, incomplete entries, stale-edit conflicts, and Markdown
+  export. Each scenario runs as a unique fresh account, so scenarios share no
+  data and need no database resets.
+- **CI:** Fast checks on every push and PR (lint, unit, integration, contract).
+  The E2E suite runs nightly or on demand.
+
 ## REMAINING DESIGN DECISIONS
 
 The following are placeholders for future discussion; they are not yet V1
 design decisions.
-
-### Testing strategy
-
-- Map requirements and failure cases to unit, persistence integration, API
-  contract, system, and end-to-end tests.
-- Decide the roles and tools for frontend, backend, system, end-to-end, and
-  any performance testing; determine whether Python system tests are needed.
-- Define how tests run locally and in continuous integration, including test
-  data and database setup.
 
 ### Detailed API contract
 
@@ -237,8 +252,7 @@ design decisions.
 
 ### Technology and deployment choices
 
-- Select frontend testing tools (Jest or Vitest) and end-to-end tools
-  (Playwright, Cucumber, or both).
+- Select the frontend unit-test tool (Jest or Vitest).
 - Choose the ORM and schema migration tool; assess whether Redux is needed.
 - Decide the initial container deployment approach and whether Kubernetes or
   K3s is a V1 requirement or a later experiment.
@@ -256,9 +270,10 @@ design decisions.
 ### backend
   - Java
   - Spring/Spring Boot
-  * unit tests
-    - JUnit
-    - JMeter ?
+  * tests
+    - JUnit (unit and integration)
+    - Testcontainers (PostgreSQL)
+    - JMeter (performance testing, not unit tests) — open
 
 ### database
   - PostgreSQL
@@ -267,7 +282,7 @@ design decisions.
   - Python + Pytest
 
 ### UI/end-to-end tests
-  - Cucumber-Gherkin / Playwright
+  - Cucumber-Gherkin driving Playwright
 
 ### deployment
   - container-based
