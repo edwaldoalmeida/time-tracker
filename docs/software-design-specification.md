@@ -113,8 +113,9 @@ local work dates and times, and rejection of access to another account's data.
 
 The REST-style JSON API uses the `/api/v1` prefix. Its OpenAPI specification
 is written contract-first and defines the shared compatibility target for
-frontends and replacement backends. Exact paths, schemas, status codes,
-pagination mechanics, and examples will be specified in that contract.
+frontends and replacement backends. The detailed contract is described in the
+next section; the OpenAPI document itself is the first implementation
+deliverable.
 
 All API operations except login and the first-account setup require an
 authenticated session. Results are scoped to the authenticated account, and
@@ -238,17 +239,139 @@ includes soft-deleted entries and retained tags.
 - **CI:** Fast checks on every push and PR (lint, unit, integration, contract).
   The E2E suite runs nightly or on demand.
 
+## DETAILED API CONTRACT
+
+Login is the only unauthenticated API operation. The first admin account is
+created by a CLI setup step outside the API, not by an endpoint. All results
+are scoped to the authenticated account; another account's resource returns
+`404`.
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/session` | Log in; sets the session cookie |
+| `DELETE` | `/api/v1/session` | Log out |
+| `GET` | `/api/v1/session` | Current account, role, and forced-password-change flag |
+| `POST` | `/api/v1/session/password` | Change own password; clears the forced-change flag |
+| `GET` | `/api/v1/accounts` | List accounts (admin) |
+| `POST` | `/api/v1/accounts` | Create account with a temporary password (admin) |
+| `POST` | `/api/v1/accounts/{id}/disable` | Disable account (admin) |
+| `POST` | `/api/v1/accounts/{id}/enable` | Re-enable account (admin) |
+| `POST` | `/api/v1/accounts/{id}/password-reset` | Issue a new temporary password (admin) |
+| `GET` | `/api/v1/entries` | Paginated timeline, newest batch first |
+| `POST` | `/api/v1/entries` | Create entry; returns `201`, `Location`, and `ETag` |
+| `GET` | `/api/v1/entries/{id}` | Get entry with `ETag` and inconsistencies |
+| `PUT` | `/api/v1/entries/{id}` | Replace entry; requires `If-Match` |
+| `DELETE` | `/api/v1/entries/{id}` | Soft-delete entry; requires `If-Match` |
+| `GET` | `/api/v1/categories` | The account's categories |
+| `GET` | `/api/v1/tags` | The account's tags, with optional `query` filter |
+| `GET` | `/api/v1/reports` | Structured report for a period and optional filters |
+
+Tags have no standalone creation endpoint. Saving an entry creates any missing
+tags, matching existing names case-insensitively, in the same transaction.
+
+Sessions last about 30 days of inactivity and end at logout. New accounts are
+created with a temporary password and must change it before other operations
+succeed.
+
+### Representations
+
+An entry response:
+
+```json
+{
+  "id": "3f1c…",
+  "date": "2026-11-24",
+  "startTime": "09:00",
+  "endTime": "10:30",
+  "category": { "id": "8a2b…", "name": "Dev" },
+  "title": "Fix login flow",
+  "description": "Traced the cookie issue",
+  "feeling": "positive",
+  "tags": [{ "id": "c7d1…", "name": "ASTRA" }],
+  "highlights": [{ "id": "b4e9…", "text": "Found the root cause" }],
+  "inconsistencies": [{ "code": "overlap", "relatedEntryIds": ["9f0c…"] }],
+  "createdAt": "2026-11-24T14:02:11Z",
+  "updatedAt": "2026-11-24T14:05:43Z"
+}
+```
+
+Dates are `YYYY-MM-DD`, times are `HH:mm`, and timestamps are ISO-8601 UTC.
+Absent optional text or times are `null`. On write, `categoryId` identifies the
+category and `tags` is a list of names. Highlights carry an `id` when they
+already exist and omit it when new. `inconsistencies` is read-only and names
+the entries involved so the UI can show what conflicts.
+
+### Pagination
+
+The timeline response is `{ "entries": [...], "nextCursor": "…" }`. A request
+without a cursor returns the newest batch; `nextCursor` returns the batch
+immediately older and is `null` when no older entries remain. Each batch is
+ordered oldest to newest internally, so the frontend can render it as-is and
+prepend it above earlier batches.
+
+The cursor is opaque and encodes the position of the oldest item in the batch
+using the timeline ordering key: date, start time, creation timestamp, and UUID.
+
+### Concurrency
+
+The `ETag` is a strong validator over the entry's editable state, including
+highlights and tags; any change to either changes the token. `PUT` and `DELETE`
+require `If-Match`, and the token is checked atomically with the change.
+Missing or stale preconditions return `412`.
+
+### Reports
+
+```
+GET /api/v1/reports?period=week&date=2026-11-24
+GET /api/v1/reports?period=custom&startDate=2026-11-01&endDate=2026-11-15
+GET /api/v1/reports?period=month&date=2026-11-01&categoryId=8a2b…&tagIds=c7d1…&tagIds=e3f4…
+```
+
+`period` is `day`, `week`, `month`, `year`, or `custom`. For calendar periods,
+`date` selects the containing period. `categoryId` and repeated `tagIds` are
+optional filters. The response contains the resolved period, the applied
+filters, `overallDurationMinutes`, `entriesWithoutDuration`, a
+`categoryBreakdown`, a `tagBreakdown`, `highlights`, and the matching
+`entries`. Breakdowns follow the inclusion rules in the time and reporting
+section; an empty report has zero durations and empty arrays, and the frontend
+shows the no-matching-entries message.
+
+### Errors and status codes
+
+Errors use `application/problem+json` per RFC 9457, with field-level detail as
+an extension:
+
+```json
+{
+  "type": "https://time-tracker/problems/validation",
+  "title": "Request validation failed",
+  "status": 422,
+  "detail": "The entry has invalid values.",
+  "errors": [
+    { "field": "endTime", "code": "must-be-after-startTime", "message": "End time must be later than start time." }
+  ]
+}
+```
+
+| Code | Meaning |
+|---|---|
+| `200` | Read, update, or report succeeded |
+| `201` | Entry or account created, with `Location` |
+| `204` | Delete or logout succeeded |
+| `400` | Malformed request (bad JSON, unknown parameters) |
+| `401` | Not authenticated, or session expired |
+| `403` | Authenticated but not allowed (non-admin, or password change required) |
+| `404` | Not found, including another account's resources |
+| `409` | Duplicate account identifier |
+| `412` | Missing or stale `If-Match` |
+| `422` | Request understood but failed business validation |
+
 ## REMAINING DESIGN DECISIONS
 
 The following are placeholders for future discussion; they are not yet V1
 design decisions.
-
-### Detailed API contract
-
-- Write the contract-first OpenAPI specification: exact paths, schemas,
-  status codes, error responses, pagination, concurrency, and examples.
-- Specify compatibility and contract-test expectations for replacement
-  backends.
 
 ### Technology and deployment choices
 
