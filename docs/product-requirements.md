@@ -67,7 +67,7 @@ V1 delivers a reliable log-entry and report workflow.
 - Overlaps are checked only between entries on the same date. Against a complete block, a start-only time is flagged at its start or inside it, but not at its end; an end-only time is flagged inside it or at its end, but not at its start.
 - Two start-only entries or two end-only entries with the same time are flagged. A start-only and end-only entry with the same time, or incomplete entries with different times, are not flagged against one another.
 
-### Main screen and suggestions
+### Main screen and entry composer
 
 - Opening the app shows the log timeline.
 - All entries appear on the timeline, with older dates above newer dates; the entry composer is at the bottom.
