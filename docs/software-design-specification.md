@@ -101,9 +101,8 @@ V1 has no restore interface. Deleting an entry does not delete reusable tags.
 The backend enforces the PRD's required fields and time rules as well as the
 rules above. PostgreSQL constraints also protect relationships and
 uniqueness, including entry–tag associations and case-insensitive tag names
-within an account. Schema migrations manage the initial tables and future
-changes; the migration tool remains to be chosen. Database backups must
-include soft-deleted entries and retained tags.
+within an account. Flyway manages the schema. Database backups must include
+soft-deleted entries and retained tags.
 
 Tests should cover persistence and retrieval of relationships, case-insensitive
 tag matching, blank highlights, soft deletion, ordering ties, preservation of
@@ -368,35 +367,76 @@ an extension:
 | `412` | Missing or stale `If-Match` |
 | `422` | Request understood but failed business validation |
 
-## REMAINING DESIGN DECISIONS
+## PERFORMANCE TESTING
 
-The following are placeholders for future discussion; they are not yet V1
-design decisions.
+Performance testing answers three questions: how the app behaves with years of
+data, how it behaves under concurrent sessions, and how its usual techniques
+work in practice. JMeter runs the load tests; k6 is noted as a possible later
+experiment.
 
-### Technology and deployment choices
+Test data has two sizes:
 
-- Select the frontend unit-test tool (Jest or Vitest).
-- Choose the ORM and schema migration tool; assess whether Redux is needed.
-- Decide the initial container deployment approach and whether Kubernetes or
-  K3s is a V1 requirement or a later experiment.
-- Specify runtime and tool versions, configuration, and deployment workflow.
+- **Baseline:** about five years of normal use, roughly 6,000–7,000 entries
+  with tags and highlights.
+- **Stress ceiling:** about ten years of heavy use, roughly 35,000–40,000
+  entries.
+
+Three workload profiles run against each dataset:
+
+- **Read-heavy:** timeline paging and report generation.
+- **Mixed realistic:** open the timeline, page through several batches, create
+  a few entries, and open a report.
+- **Write-heavy:** repeated entry saves, stressing tag resolution and
+  concurrency tokens.
+
+Concurrency ramps from one session to 100 or more, recording where response
+times degrade.
+
+Pass/fail thresholds apply at baseline volume only, at p95. The stress ceiling
+is exploratory and only reports results.
+
+| Operation | Target (p95, baseline) |
+|---|---|
+| Timeline page (50 entries) | < 300 ms |
+| Get a single entry | < 150 ms |
+| Create an entry with tags and highlights | < 400 ms |
+| Report, month period | < 1.5 s |
+| Report, year period | < 3 s |
+
+## TECHNOLOGY AND DEPLOYMENT DECISIONS
+
+- **Frontend:** React with TypeScript, built by Vite. Unit tests use Vitest.
+  No Redux: state stays in components and a small fetch layer, since most state
+  is server data.
+- **Backend:** Java with Spring Boot. Persistence uses Spring Data JPA
+  (Hibernate) behind the persistence ports. Schema migrations use Flyway, with
+  Liquibase noted as a possible later experiment.
+- **Database:** PostgreSQL.
+- **Deployment:** Docker Compose on one home machine, running the frontend,
+  backend, PostgreSQL, and a TLS reverse proxy. Migrating to K3s is a planned
+  later experiment; the images and configuration carry over.
+- **Versions:** Use current LTS releases for the JDK, Node, Spring Boot, and
+  PostgreSQL, pinned explicitly in build files and container images.
 
 ## TECH STACK
 
 ### frontend
   - React
-  - Redux
   - TypeScript
+  - Vite
+  - no Redux: component state plus a small fetch layer
   * unit tests
-    - Jest (unit tests) / Vite + Vitest
+    - Vitest
 
 ### backend
   - Java
   - Spring/Spring Boot
+  - Spring Data JPA (Hibernate)
+  - Flyway (migrations)
   * tests
     - JUnit (unit and integration)
     - Testcontainers (PostgreSQL)
-    - JMeter (performance testing, not unit tests) — open
+    - JMeter (performance testing; k6 as a possible later experiment)
 
 ### database
   - PostgreSQL
@@ -409,7 +449,8 @@ design decisions.
 
 ### deployment
   - container-based
-  - deployment in K8s (or K3s)
+  - Docker Compose for V1
+  - K3s migration planned as a later experiment
 
 ### general
   - data layer: ORM to be able to swap database (and to learn how to work with ORMs)
